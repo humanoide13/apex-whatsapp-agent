@@ -392,63 +392,118 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>APEX CAPILAR — Conversas</title>
 <style>
+  :root { --gold: #c9a84c; --bg: #0a0a0a; --surface: #111; --surface2: #161616; --border: #1e1e1e; --text: #e8e8e8; --muted: #777; --patient-bg: #1b2b1b; --patient-text: #c8e6c8; --bot-bg: #1a1a28; --bot-text: #c8c8e6; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; }
-  .header { background: #111; border-bottom: 1px solid #222; padding: 20px 24px; display: flex; align-items: center; gap: 16px; }
-  .header h1 { font-size: 18px; font-weight: 600; color: #c9a84c; }
-  .header .badge { background: #1a1a1a; color: #888; font-size: 12px; padding: 4px 10px; border-radius: 12px; }
-  .container { display: flex; height: calc(100vh - 65px); }
-  .sidebar { width: 340px; border-right: 1px solid #222; overflow-y: auto; background: #0d0d0d; }
-  .conv-item { padding: 14px 18px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .15s; }
-  .conv-item:hover, .conv-item.active { background: #1a1a1a; }
-  .conv-name { font-weight: 600; font-size: 14px; color: #f0f0f0; }
-  .conv-phone { font-size: 12px; color: #666; margin-top: 2px; }
-  .conv-meta { font-size: 11px; color: #555; margin-top: 6px; display: flex; justify-content: space-between; }
-  .chat-area { flex: 1; display: flex; flex-direction: column; }
-  .chat-header { padding: 16px 24px; border-bottom: 1px solid #222; background: #111; }
-  .chat-header h2 { font-size: 15px; color: #e0e0e0; }
-  .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }
-  .msg { max-width: 70%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
-  .msg.user { align-self: flex-end; background: #1a3a2a; color: #d0f0d0; border-bottom-right-radius: 4px; }
-  .msg.assistant { align-self: flex-start; background: #1a1a2a; color: #d0d0f0; border-bottom-left-radius: 4px; }
-  .msg .time { font-size: 10px; color: #666; margin-top: 4px; text-align: right; }
-  .empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #444; font-size: 15px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .header h1 { font-size: 17px; font-weight: 700; color: var(--gold); letter-spacing: 0.5px; }
+  .header .subtitle { font-size: 12px; color: var(--muted); }
+  .header .status { font-size: 11px; color: #4a9; background: rgba(68,170,153,0.1); padding: 3px 10px; border-radius: 10px; }
+  .container { display: flex; height: calc(100vh - 56px); }
+
+  .sidebar { width: 340px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--bg); }
+  .sidebar-title { padding: 14px 18px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .conv-item { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+  .conv-item:hover, .conv-item.active { background: var(--surface2); }
+  .conv-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .conv-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .conv-date { font-size: 11px; color: var(--muted); }
+  .conv-phone { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .conv-preview { font-size: 12px; color: #555; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv-count { font-size: 10px; color: var(--gold); background: rgba(201,168,76,0.12); padding: 2px 7px; border-radius: 8px; margin-top: 4px; display: inline-block; }
+
+  .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+  .chat-header { padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+  .chat-header-info h2 { font-size: 15px; font-weight: 600; color: var(--text); }
+  .chat-header-info .phone { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .chat-back { display: none; background: none; border: none; color: var(--gold); font-size: 14px; cursor: pointer; padding: 6px 10px; }
+
+  .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; }
+  .date-sep { text-align: center; margin: 16px 0 10px; }
+  .date-sep span { font-size: 11px; color: var(--muted); background: var(--surface); padding: 4px 14px; border-radius: 10px; }
+
+  .msg-row { display: flex; flex-direction: column; max-width: 75%; gap: 2px; }
+  .msg-row.patient { align-self: flex-end; align-items: flex-end; }
+  .msg-row.bot { align-self: flex-start; align-items: flex-start; }
+  .msg-sender { font-size: 11px; font-weight: 600; margin-bottom: 1px; padding: 0 4px; }
+  .msg-row.patient .msg-sender { color: #6b9; }
+  .msg-row.bot .msg-sender { color: var(--gold); }
+
+  .msg-bubble { padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
+  .msg-row.patient .msg-bubble { background: var(--patient-bg); color: var(--patient-text); border-bottom-right-radius: 4px; }
+  .msg-row.bot .msg-bubble { background: var(--bot-bg); color: var(--bot-text); border-bottom-left-radius: 4px; }
+
+  .msg-time { font-size: 10px; color: #555; padding: 0 4px; }
+
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #333; gap: 8px; }
+  .empty-icon { font-size: 40px; opacity: 0.3; }
+  .empty-text { font-size: 14px; }
+
   @media (max-width: 700px) {
     .sidebar { width: 100%; }
     .chat-area { display: none; }
     .container.chat-open .sidebar { display: none; }
     .container.chat-open .chat-area { display: flex; }
+    .container.chat-open .chat-back { display: block; }
+    .msg-row { max-width: 88%; }
   }
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>APEX CAPILAR</h1>
-  <span class="badge">Conversas WhatsApp</span>
+  <div class="header-left">
+    <h1>APEX CAPILAR</h1>
+    <span class="subtitle">Painel de Conversas</span>
+  </div>
+  <span class="status">Bot activo</span>
 </div>
 <div class="container" id="container">
-  <div class="sidebar" id="sidebar"></div>
+  <div class="sidebar">
+    <div class="sidebar-title">Conversas recentes</div>
+    <div id="sidebar"></div>
+  </div>
   <div class="chat-area" id="chatArea">
-    <div class="empty">Selecione uma conversa</div>
+    <div class="empty">
+      <div class="empty-icon">&#9993;</div>
+      <div class="empty-text">Selecione uma conversa para visualizar</div>
+    </div>
   </div>
 </div>
 <script>
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const API = (path) => path + '?token=' + encodeURIComponent(TOKEN);
 
+function formatDate(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = (now - d) / 86400000;
+  if (diff < 1 && d.getDate() === now.getDate()) return 'Hoje';
+  if (diff < 2) return 'Ontem';
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatTime(iso) {
+  return new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatHour(iso) {
+  return new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+}
+
 async function load() {
   const res = await fetch(API('/api/conversations'));
-  if (!res.ok) { document.getElementById('sidebar').innerHTML = '<div class="empty">Acesso negado</div>'; return; }
+  if (!res.ok) { document.getElementById('sidebar').innerHTML = '<div class="empty"><div class="empty-text">Acesso negado</div></div>'; return; }
   const convs = await res.json();
   const sb = document.getElementById('sidebar');
   sb.innerHTML = convs.map(c => `
-    <div class="conv-item" onclick="openChat('${c.phone}', '${c.name.replace(/'/g,"\\\\'")}')">
-      <div class="conv-name">${c.name}</div>
-      <div class="conv-phone">+${c.phone}</div>
-      <div class="conv-meta">
-        <span>${c.total_messages} msgs</span>
-        <span>${new Date(c.last_message).toLocaleDateString('pt-PT')}</span>
+    <div class="conv-item" onclick="openChat('${c.phone}', '${(c.name||'').replace(/'/g,"\\\\'")}')">
+      <div class="conv-top">
+        <span class="conv-name">${c.name || 'Sem nome'}</span>
+        <span class="conv-date">${formatDate(c.last_message)}</span>
       </div>
+      <div class="conv-phone">+${c.phone}</div>
+      <span class="conv-count">${c.total_messages} mensagens</span>
     </div>
   `).join('');
 }
@@ -457,20 +512,37 @@ async function openChat(phone, name) {
   document.getElementById('container').classList.add('chat-open');
   const res = await fetch(API('/api/conversations/' + phone));
   const msgs = await res.json();
+
+  let lastDate = '';
+  let html = '';
+  msgs.forEach(m => {
+    const msgDate = formatDate(m.created_at);
+    if (msgDate !== lastDate) {
+      html += '<div class="date-sep"><span>' + msgDate + '</span></div>';
+      lastDate = msgDate;
+    }
+    const isPatient = m.role === 'user';
+    const cls = isPatient ? 'patient' : 'bot';
+    const sender = isPatient ? (name || 'Paciente') : 'APEX CAPILAR';
+    html += '<div class="msg-row ' + cls + '">';
+    html += '<div class="msg-sender">' + sender + '</div>';
+    html += '<div class="msg-bubble">' + m.content.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    html += '<div class="msg-time">' + formatTime(m.created_at) + '</div>';
+    html += '</div>';
+  });
+
   const ca = document.getElementById('chatArea');
-  ca.innerHTML = `
-    <div class="chat-header"><h2>${name} &nbsp; <span style="color:#666;font-weight:400">+${phone}</span></h2></div>
-    <div class="chat-messages">${msgs.map(m => `
-      <div class="msg ${m.role}">
-        ${m.content}
-        <div class="time">${new Date(m.created_at).toLocaleString('pt-PT')}</div>
-      </div>
-    `).join('')}</div>
-  `;
-  ca.querySelector('.chat-messages').scrollTop = 99999;
+  ca.innerHTML =
+    '<div class="chat-header">' +
+      '<button class="chat-back" onclick="document.getElementById(\\'container\\').classList.remove(\\'chat-open\\')">&#8592; Voltar</button>' +
+      '<div class="chat-header-info"><h2>' + (name||'Paciente') + '</h2><div class="phone">+' + phone + '</div></div>' +
+    '</div>' +
+    '<div class="chat-messages">' + html + '</div>';
+  ca.querySelector('.chat-messages').scrollTop = 999999;
 }
 
 load();
+setInterval(load, 30000);
 </script>
 </body>
 </html>"""
