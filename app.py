@@ -64,7 +64,8 @@ E-mail: contacto@apexcapilar.com
 
 LOCALIZACAO E HORARIO
 
-As consultas realizam-se no Centro de Medicina Integrativa Dra. Ana Moreira, no Porto.
+As consultas realizam-se no Centro de Medicina Integrativa Dra. Ana Moreira.
+Av. da Boavista 1681, 1o andar, 4100-132 Porto, Portugal.
 Localizacao no Google Maps: https://share.google/AUS6FGq85bN2HESLY
 
 Horario de consultas:
