@@ -1,118 +1,48 @@
-# 🏥 APEX CAPILAR — WhatsApp AI Agent
+# APEX CAPILAR — WhatsApp AI Agent
 
-Assistente virtual inteligente para a clínica APEX CAPILAR, powered by **Claude (Anthropic)** + **WhatsApp Business Cloud API**.
+Assistente virtual da APEX CAPILAR via WhatsApp Business Cloud API + Claude (Anthropic).
 
-## O que faz
+## Funcionalidades
 
-- ✅ Responde perguntas sobre procedimentos (FUE, DHI, tricologia)
-- ✅ Faz triagem inicial do paciente (histórico, queixas, expectativas)
-- ✅ Encaminha para agendamento de consulta presencial
-- ✅ Mantém histórico de conversa por paciente
-- ✅ Detecta idioma e responde no idioma do paciente
-- ✅ Trata mensagens de áudio e imagem com resposta adequada
-- ✅ Nunca faz diagnósticos nem informa valores cirúrgicos
+- Resposta automática via Claude com contexto de conversa persistente
+- Logging de todas as conversas (SQLite)
+- Dashboard web para consulta de conversas (`/dashboard`)
+- API JSON para integração (`/api/conversations`)
+- Autenticação por token no dashboard e API
 
----
+## Variáveis de Ambiente (Railway)
 
-## Setup Rápido
+| Variável | Descrição |
+|---|---|
+| `WHATSAPP_TOKEN` | System User Token (Meta Business) |
+| `WHATSAPP_PHONE_ID` | Phone Number ID do número registado |
+| `VERIFY_TOKEN` | Token de verificação do webhook |
+| `ANTHROPIC_API_KEY` | API key Anthropic |
+| `CLAUDE_MODEL` | Modelo Claude (default: `claude-sonnet-4-20250514`) |
+| `DASHBOARD_TOKEN` | Token secreto para aceder ao dashboard e API |
+| `DB_PATH` | Caminho da base de dados (default: `/data/conversations.db`) |
 
-### 1. Pré-requisitos
+## Endpoints
 
-- Python 3.11+
-- Conta no [Meta for Developers](https://developers.facebook.com)
-- API Key da [Anthropic](https://console.anthropic.com)
+| Método | Path | Descrição |
+|---|---|---|
+| GET | `/` | Health check |
+| GET/POST | `/webhook` | WhatsApp webhook |
+| GET | `/dashboard?token=XXX` | Dashboard de conversas (HTML) |
+| GET | `/api/conversations?token=XXX` | Lista de conversas (JSON) |
+| GET | `/api/conversations/{phone}?token=XXX` | Mensagens de um contacto (JSON) |
 
-### 2. Configurar WhatsApp Business API
+## Deploy no Railway
 
-1. Vá a [developers.facebook.com](https://developers.facebook.com) e crie um App do tipo **Business**
-2. Adicione o produto **WhatsApp**
-3. Em **API Setup**, copie:
-   - **Temporary Access Token** (ou crie um permanente via System User)
-   - **Phone Number ID**
-4. Em **Webhooks**, configure:
-   - **Callback URL**: `https://SEU_DOMINIO/webhook`
-   - **Verify Token**: `apex-capilar-2026` (ou o que definir no .env)
-   - **Subscribed Fields**: marque `messages`
+1. Conecta o repo GitHub
+2. Configura as variáveis de ambiente
+3. **Importante:** adiciona um Volume no Railway montado em `/data` para persistir o SQLite
+4. Faz deploy
 
-### 3. Instalar e Rodar
+## Migração para número real (+351 936 892 039)
 
-```bash
-# Clonar / copiar o projeto
-cd apex-whatsapp-agent
-
-# Criar .env a partir do template
-cp .env.example .env
-# Editar .env com os seus tokens
-
-# Instalar dependências
-pip install -r requirements.txt
-
-# Rodar localmente
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 4. Expor para a Internet (desenvolvimento)
-
-Para testes locais, use [ngrok](https://ngrok.com):
-
-```bash
-ngrok http 8000
-```
-
-Use o URL do ngrok (ex: `https://abc123.ngrok.io/webhook`) como Callback URL no Meta.
-
-### 5. Deploy em Produção
-
-**Opção A — Docker:**
-```bash
-docker build -t apex-whatsapp-agent .
-docker run -p 8000:8000 --env-file .env apex-whatsapp-agent
-```
-
-**Opção B — Railway / Render:**
-- Faça push para o GitHub
-- Conecte ao Railway ou Render
-- Adicione as variáveis de ambiente do .env
-- O serviço detecta automaticamente o Dockerfile
-
----
-
-## Estrutura do Projeto
-
-```
-apex-whatsapp-agent/
-├── app.py              ← Aplicação principal (FastAPI)
-├── requirements.txt    ← Dependências Python
-├── .env.example        ← Template de variáveis de ambiente
-├── Dockerfile          ← Container para deploy
-└── README.md           ← Este ficheiro
-```
-
-## Arquitetura
-
-```
-[Paciente] → WhatsApp → [Meta Cloud API] → POST /webhook → [FastAPI Server]
-                                                                │
-                                                          Claude API (Anthropic)
-                                                                │
-                                                          Resposta ← ← ← ←
-                                                                │
-[Paciente] ← WhatsApp ← [Meta Cloud API] ← POST /messages ← ─┘
-```
-
----
-
-## Próximos Passos (sugestões)
-
-- [ ] **Redis** para persistir conversas entre restarts
-- [ ] **Transcrição de áudio** (Whisper API) para aceitar notas de voz
-- [ ] **Agendamento real** integrado com Google Calendar
-- [ ] **Templates de mensagem** aprovados pelo Meta para mensagens proativas
-- [ ] **Dashboard** web para ver conversas e métricas
-- [ ] **Rate limiting** para evitar abuso
-
----
-
-## Licença
-
-Projeto interno — APEX CAPILAR © 2026
+1. **Meta Business Suite** → WhatsApp Manager → Add Phone Number → verificar +351936892039
+2. Copiar o novo **Phone Number ID** para `WHATSAPP_PHONE_ID` no Railway
+3. Verificar que o System User Token tem permissão para o novo número
+4. Gerar um `DASHBOARD_TOKEN` seguro e guardar no Railway
+5. Redeploy
