@@ -392,35 +392,53 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>APEX CAPILAR — Conversas</title>
 <style>
-  :root { --gold: #c9a84c; --bg: #0a0a0a; --surface: #111; --surface2: #161616; --border: #1e1e1e; --text: #e8e8e8; --muted: #777; --patient-bg: #1b2b1b; --patient-text: #c8e6c8; --bot-bg: #1a1a28; --bot-text: #c8c8e6; }
+  :root { --gold: #c9a84c; --bg: #0a0a0a; --surface: #111; --surface2: #161616; --border: #1e1e1e; --text: #e8e8e8; --muted: #777; --patient-bg: #1b2b1b; --patient-text: #c8e6c8; --bot-bg: #1a1a28; --bot-text: #c8c8e6; --new: #e05050; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
   .header h1 { font-size: 17px; font-weight: 700; color: var(--gold); letter-spacing: 0.5px; }
   .header .subtitle { font-size: 12px; color: var(--muted); }
   .header .status { font-size: 11px; color: #4a9; background: rgba(68,170,153,0.1); padding: 3px 10px; border-radius: 10px; }
-  .container { display: flex; height: calc(100vh - 56px); }
+  .container { display: flex; height: calc(100vh - 54px); }
 
-  .sidebar { width: 340px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--bg); }
-  .sidebar-title { padding: 14px 18px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
-  .conv-item { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+  .sidebar { width: 360px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg); }
+  .sidebar-top { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .search-box { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px 9px 34px; color: var(--text); font-size: 13px; outline: none; transition: border .2s; }
+  .search-box:focus { border-color: var(--gold); }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+  .sidebar-list { flex: 1; overflow-y: auto; }
+  .sidebar-title { padding: 10px 14px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+  .sidebar-title .total-badge { background: var(--surface2); padding: 2px 8px; border-radius: 8px; font-size: 10px; }
+
+  .conv-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; position: relative; }
   .conv-item:hover, .conv-item.active { background: var(--surface2); }
-  .conv-top { display: flex; justify-content: space-between; align-items: baseline; }
-  .conv-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .conv-item.has-new { border-left: 3px solid var(--gold); }
+  .conv-top { display: flex; justify-content: space-between; align-items: center; }
+  .conv-name { font-weight: 600; font-size: 14px; color: var(--text); flex: 1; }
   .conv-date { font-size: 11px; color: var(--muted); }
   .conv-phone { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .conv-preview { font-size: 12px; color: #555; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .conv-count { font-size: 10px; color: var(--gold); background: rgba(201,168,76,0.12); padding: 2px 7px; border-radius: 8px; margin-top: 4px; display: inline-block; }
+  .conv-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+  .conv-preview { font-size: 12px; color: #555; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+  .conv-badge { display: none; min-width: 20px; height: 20px; background: var(--gold); color: #000; font-size: 11px; font-weight: 700; border-radius: 10px; text-align: center; line-height: 20px; padding: 0 6px; }
+  .conv-item.has-new .conv-badge { display: inline-block; }
+  .conv-item.has-new .conv-name { color: #fff; }
+  .conv-item.has-new .conv-date { color: var(--gold); }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .new-dot { width: 8px; height: 8px; background: var(--gold); border-radius: 50%; display: none; animation: pulse 1.5s infinite; margin-left: 6px; flex-shrink: 0; }
+  .conv-item.has-new .new-dot { display: inline-block; }
 
   .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
-  .chat-header { padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+  .chat-header { padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; }
   .chat-header-info h2 { font-size: 15px; font-weight: 600; color: var(--text); }
   .chat-header-info .phone { font-size: 12px; color: var(--muted); margin-top: 1px; }
-  .chat-back { display: none; background: none; border: none; color: var(--gold); font-size: 14px; cursor: pointer; padding: 6px 10px; }
+  .chat-back { display: none; background: none; border: none; color: var(--gold); font-size: 16px; cursor: pointer; padding: 4px 8px; }
 
   .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; }
-  .date-sep { text-align: center; margin: 16px 0 10px; }
+  .date-sep { text-align: center; margin: 14px 0 8px; }
   .date-sep span { font-size: 11px; color: var(--muted); background: var(--surface); padding: 4px 14px; border-radius: 10px; }
 
   .msg-row { display: flex; flex-direction: column; max-width: 75%; gap: 2px; }
@@ -429,16 +447,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .msg-sender { font-size: 11px; font-weight: 600; margin-bottom: 1px; padding: 0 4px; }
   .msg-row.patient .msg-sender { color: #6b9; }
   .msg-row.bot .msg-sender { color: var(--gold); }
-
   .msg-bubble { padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
   .msg-row.patient .msg-bubble { background: var(--patient-bg); color: var(--patient-text); border-bottom-right-radius: 4px; }
   .msg-row.bot .msg-bubble { background: var(--bot-bg); color: var(--bot-text); border-bottom-left-radius: 4px; }
-
   .msg-time { font-size: 10px; color: #555; padding: 0 4px; }
 
   .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #333; gap: 8px; }
   .empty-icon { font-size: 40px; opacity: 0.3; }
   .empty-text { font-size: 14px; }
+  .no-results { padding: 30px 18px; text-align: center; color: var(--muted); font-size: 13px; }
 
   @media (max-width: 700px) {
     .sidebar { width: 100%; }
@@ -456,12 +473,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <h1>APEX CAPILAR</h1>
     <span class="subtitle">Painel de Conversas</span>
   </div>
-  <span class="status">Bot activo</span>
+  <span class="status" id="statusBadge">Bot activo</span>
 </div>
 <div class="container" id="container">
   <div class="sidebar">
-    <div class="sidebar-title">Conversas recentes</div>
-    <div id="sidebar"></div>
+    <div class="sidebar-top">
+      <div class="search-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input class="search-box" id="searchInput" type="text" placeholder="Pesquisar por nome ou numero..." oninput="filterConversations()">
+      </div>
+    </div>
+    <div class="sidebar-list">
+      <div class="sidebar-title"><span>Conversas</span><span class="total-badge" id="totalBadge">0</span></div>
+      <div id="sidebar"></div>
+    </div>
   </div>
   <div class="chat-area" id="chatArea">
     <div class="empty">
@@ -473,6 +498,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <script>
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const API = (path) => path + '?token=' + encodeURIComponent(TOKEN);
+let allConvs = [];
+let currentPhone = null;
+let seenCounts = JSON.parse(localStorage.getItem('apex_seen') || '{}');
+
+function saveSeen() { localStorage.setItem('apex_seen', JSON.stringify(seenCounts)); }
+
+function getNewCount(phone, total) {
+  const seen = seenCounts[phone] || 0;
+  return Math.max(0, total - seen);
+}
+
+function markSeen(phone, total) {
+  seenCounts[phone] = total;
+  saveSeen();
+}
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -487,34 +527,78 @@ function formatTime(iso) {
   return new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function formatHour(iso) {
-  return new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+function renderConversations(convs) {
+  const sb = document.getElementById('sidebar');
+  if (!convs.length) { sb.innerHTML = '<div class="no-results">Nenhuma conversa encontrada</div>'; return; }
+  sb.innerHTML = convs.map(c => {
+    const nw = getNewCount(c.phone, c.total_messages);
+    const cls = nw > 0 ? ' has-new' : '';
+    return '<div class="conv-item' + cls + '" onclick="openChat(\\'' + c.phone + '\\', \\'' + (c.name||'').replace(/'/g,"\\\\'") + '\\', ' + c.total_messages + ')">' +
+      '<div class="conv-top">' +
+        '<span class="conv-name">' + (c.name || 'Sem nome') + '<span class="new-dot"></span></span>' +
+        '<span class="conv-date">' + formatDate(c.last_message) + '</span>' +
+      '</div>' +
+      '<div class="conv-phone">+' + c.phone + '</div>' +
+      '<div class="conv-bottom">' +
+        '<span class="conv-preview">' + c.total_messages + ' mensagens</span>' +
+        '<span class="conv-badge">' + (nw > 0 ? nw : '') + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function filterConversations() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  if (!q) { renderConversations(allConvs); return; }
+  const filtered = allConvs.filter(c => {
+    const name = (c.name || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    return name.includes(q) || phone.includes(q);
+  });
+  renderConversations(filtered);
 }
 
 async function load() {
-  const res = await fetch(API('/api/conversations'));
-  if (!res.ok) { document.getElementById('sidebar').innerHTML = '<div class="empty"><div class="empty-text">Acesso negado</div></div>'; return; }
-  const convs = await res.json();
-  const sb = document.getElementById('sidebar');
-  sb.innerHTML = convs.map(c => `
-    <div class="conv-item" onclick="openChat('${c.phone}', '${(c.name||'').replace(/'/g,"\\\\'")}')">
-      <div class="conv-top">
-        <span class="conv-name">${c.name || 'Sem nome'}</span>
-        <span class="conv-date">${formatDate(c.last_message)}</span>
-      </div>
-      <div class="conv-phone">+${c.phone}</div>
-      <span class="conv-count">${c.total_messages} mensagens</span>
-    </div>
-  `).join('');
+  try {
+    const res = await fetch(API('/api/conversations'));
+    if (!res.ok) { document.getElementById('sidebar').innerHTML = '<div class="no-results">Acesso negado</div>'; return; }
+    allConvs = await res.json();
+    document.getElementById('totalBadge').textContent = allConvs.length;
+    const totalNew = allConvs.reduce((s, c) => s + getNewCount(c.phone, c.total_messages), 0);
+    const statusEl = document.getElementById('statusBadge');
+    if (totalNew > 0) {
+      statusEl.textContent = totalNew + ' nova' + (totalNew > 1 ? 's' : '');
+      statusEl.style.color = '#e05050';
+      statusEl.style.background = 'rgba(224,80,80,0.1)';
+      document.title = '(' + totalNew + ') APEX CAPILAR — Conversas';
+    } else {
+      statusEl.textContent = 'Bot activo';
+      statusEl.style.color = '#4a9';
+      statusEl.style.background = 'rgba(68,170,153,0.1)';
+      document.title = 'APEX CAPILAR — Conversas';
+    }
+    filterConversations();
+    if (currentPhone) refreshChat();
+  } catch(e) { console.error(e); }
 }
 
-async function openChat(phone, name) {
-  document.getElementById('container').classList.add('chat-open');
-  const res = await fetch(API('/api/conversations/' + phone));
+async function refreshChat() {
+  if (!currentPhone) return;
+  const res = await fetch(API('/api/conversations/' + currentPhone));
   const msgs = await res.json();
+  const chatMsgs = document.querySelector('.chat-messages');
+  if (!chatMsgs) return;
+  const wasAtBottom = chatMsgs.scrollTop + chatMsgs.clientHeight >= chatMsgs.scrollHeight - 50;
+  renderMessages(chatMsgs, msgs, currentPhone);
+  if (wasAtBottom) chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  const conv = allConvs.find(c => c.phone === currentPhone);
+  if (conv) markSeen(currentPhone, conv.total_messages);
+}
 
+function renderMessages(container, msgs, phone) {
   let lastDate = '';
   let html = '';
+  const name = msgs.length > 0 ? (msgs.find(m => m.role === 'user') || {}).name || 'Paciente' : 'Paciente';
   msgs.forEach(m => {
     const msgDate = formatDate(m.created_at);
     if (msgDate !== lastDate) {
@@ -523,26 +607,38 @@ async function openChat(phone, name) {
     }
     const isPatient = m.role === 'user';
     const cls = isPatient ? 'patient' : 'bot';
-    const sender = isPatient ? (name || 'Paciente') : 'APEX CAPILAR';
-    html += '<div class="msg-row ' + cls + '">';
-    html += '<div class="msg-sender">' + sender + '</div>';
-    html += '<div class="msg-bubble">' + m.content.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
-    html += '<div class="msg-time">' + formatTime(m.created_at) + '</div>';
-    html += '</div>';
+    const sender = isPatient ? (m.name || 'Paciente') : 'APEX CAPILAR';
+    html += '<div class="msg-row ' + cls + '">' +
+      '<div class="msg-sender">' + sender + '</div>' +
+      '<div class="msg-bubble">' + m.content.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+      '<div class="msg-time">' + formatTime(m.created_at) + '</div>' +
+    '</div>';
   });
+  container.innerHTML = html;
+}
+
+async function openChat(phone, name, total) {
+  currentPhone = phone;
+  markSeen(phone, total);
+  document.getElementById('container').classList.add('chat-open');
+  const res = await fetch(API('/api/conversations/' + phone));
+  const msgs = await res.json();
 
   const ca = document.getElementById('chatArea');
   ca.innerHTML =
     '<div class="chat-header">' +
-      '<button class="chat-back" onclick="document.getElementById(\\'container\\').classList.remove(\\'chat-open\\')">&#8592; Voltar</button>' +
+      '<button class="chat-back" onclick="currentPhone=null;document.getElementById(\\'container\\').classList.remove(\\'chat-open\\');load();">&#8592; Voltar</button>' +
       '<div class="chat-header-info"><h2>' + (name||'Paciente') + '</h2><div class="phone">+' + phone + '</div></div>' +
     '</div>' +
-    '<div class="chat-messages">' + html + '</div>';
+    '<div class="chat-messages"></div>';
+
+  renderMessages(ca.querySelector('.chat-messages'), msgs, phone);
   ca.querySelector('.chat-messages').scrollTop = 999999;
+  load();
 }
 
 load();
-setInterval(load, 30000);
+setInterval(load, 15000);
 </script>
 </body>
 </html>"""
