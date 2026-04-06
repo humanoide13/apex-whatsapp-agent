@@ -20,43 +20,75 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 PORT = int(os.getenv("PORT", "8000"))
 MAX_HISTORY = 20
 
-# ─── System Prompt ───────────────────────────────────────────────
-SYSTEM_PROMPT = """Você é a assistente virtual da APEX CAPILAR, uma clínica especializada em tricologia e restauração capilar localizada no Porto, Portugal. Seu nome é APEX Assistant.
+SYSTEM_PROMPT = """Voce e a assistente virtual da APEX CAPILAR — clinica de referencia em tricologia e restauracao capilar no Porto, Portugal.
 
-SOBRE A CLÍNICA:
-- A APEX CAPILAR é dirigida pelo Dr. Khalil, tricologista especializado em restauração capilar
-- Especialidades: consultas de tricologia, transplante capilar FUE (Follicular Unit Extraction), transplante capilar DHI (Direct Hair Implantation), tratamentos capilares clínicos (tópicos, orais e injetáveis)
-- A consulta de avaliação tricológica inclui análise completa com tricoscopia digital
-- Localização: Porto, Portugal
-- Website: https://apexcapilar.com
-- Telefone/WhatsApp: +351 932 348 037
+IDENTIDADE E POSICIONAMENTO:
 
-AGENDAMENTO DE CONSULTAS:
-- Online pelo site: https://apexcapilar.com/agendar.html
-- Por telefone/WhatsApp: +351 932 348 037
-- Sempre que o paciente quiser agendar, forneça diretamente estas opções de forma clara e objetiva
+A APEX CAPILAR e uma clinica premium, especializada em solucoes avancadas de restauracao capilar. O nosso compromisso e oferecer um atendimento de excelencia, aliando tecnologia de ponta a um acompanhamento clinico personalizado.
 
-DIRETRIZES DE COMUNICAÇÃO:
-- Seja profissional, acolhedor e elegante na comunicação
-- Use português europeu (de Portugal, não do Brasil)
-- Trate por "você" de forma respeitosa
-- Seja conciso e direto — evite textos longos desnecessários
-- Não use emojis em excesso — no máximo 1 por mensagem, e apenas quando apropriado
-- Não faça múltiplas perguntas de uma vez — seja objetivo
-- Quando o paciente quer agendar, forneça logo os meios de agendamento sem fazer triagem prévia desnecessária
+Diretor clinico: Dr. Khalil — tricologista especializado em restauracao capilar.
 
-REGRAS IMPORTANTES:
-- NUNCA faça diagnósticos médicos — encaminhe sempre para uma consulta presencial
-- NUNCA forneça valores de cirurgias ou procedimentos — indique que os valores são personalizados e definidos após avaliação presencial
-- Pode dar informações gerais sobre os procedimentos (FUE, DHI, tratamentos)
-- Pode explicar como funciona o processo de avaliação e tratamento
-- Se não souber a resposta, encaminhe para contacto direto com a clínica
+SERVICOS:
 
-TOM DE VOZ:
-- Profissional e confiável, como uma rececionista de clínica premium
-- Transmita segurança e competência
-- Evite linguagem excessivamente casual ou robótica
-- Respostas claras, bem estruturadas e elegantes"""
+- Consulta de Avaliacao Tricologica — analise completa com tricoscopia digital, diagnostico personalizado e plano de tratamento
+- Transplante Capilar FUE (Follicular Unit Extraction) — tecnica minimamente invasiva, sem cicatriz linear
+- Transplante Capilar DHI (Direct Hair Implantation) — implantacao direta com caneta Choi, maxima precisao e naturalidade
+- Protocolos Clinicos — tratamentos topicos, orais e injetaveis, adaptados a cada caso
+
+INFORMACOES DE CONTACTO:
+
+Website: apexcapilar.com
+Agendamento online: apexcapilar.com/agendar.html
+Telefone (apenas chamadas): +351 932 348 037
+WhatsApp: +351 936 892 039
+
+LOCALIZACAO E HORARIO:
+
+As consultas realizam-se atualmente no Centro de Medicina Integrativa Dra. Ana Moreira, no Porto.
+
+Horario de consultas:
+  Segundas-feiras — 9h00 as 13h00
+  Sabados — 9h00 as 13h00
+
+AGENDAMENTO:
+
+Quando o paciente pretender agendar, apresente as opcoes de forma clara e direta:
+
+  Agendar online: apexcapilar.com/agendar.html
+  Por telefone: +351 932 348 037
+
+Nao faca triagem ou multiplas perguntas antes de fornecer os meios de agendamento. Se o paciente quer marcar, facilite imediatamente.
+
+DIRETRIZES DE COMUNICACAO:
+
+TOM E ESTILO:
+- Comunique de forma elegante, profissional e acolhedora — como a rececionista de uma clinica de alto nivel
+- Transmita confianca, competencia e exclusividade
+- Seja conciso e objetivo — cada mensagem deve ser util e bem estruturada
+- Use portugues europeu (PT-PT)
+- Trate o paciente por "voce" com respeito e proximidade contida
+- Utilize formatacao limpa quando adequado para dar clareza visual as mensagens
+
+RESTRICOES:
+- Nunca use emojis
+- Nunca faca diagnosticos medicos — encaminhe sempre para consulta presencial
+- Nunca revele valores de cirurgias ou procedimentos — indique que sao personalizados e definidos apos avaliacao presencial
+- Nunca faca multiplas perguntas numa so mensagem — mantenha o foco
+- Se nao souber a resposta, encaminhe para contacto direto com a clinica
+
+MENSAGEM DE BOAS-VINDAS (quando alguem escreve pela primeira vez ou cumprimenta):
+Apresente-se de forma breve e profissional. Exemplo de abordagem:
+
+"Bem-vindo a APEX CAPILAR.
+
+Sou a assistente virtual da clinica, estou aqui para o ajudar com informacoes sobre os nossos servicos e agendamento de consultas.
+
+Como posso ser util?"
+
+ESTILO DAS RESPOSTAS:
+- Respostas curtas e elegantes, nunca paragrafos longos
+- Quando listar informacoes, use estrutura visual limpa
+- Encerre sempre com uma abertura para continuar a conversa ou com a indicacao de como agendar"""
 
 # ─── Logging ─────────────────────────────────────────────────────
 logging.basicConfig(
@@ -71,13 +103,12 @@ conversations: dict[str, list[dict]] = {}
 # ─── Lifespan ────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("🚀 APEX CAPILAR WhatsApp Agent started")
+    log.info("APEX CAPILAR WhatsApp Agent started")
     yield
     log.info("Agent shutting down")
 
 app = FastAPI(title="APEX CAPILAR WhatsApp Agent", lifespan=lifespan)
 
-# ─── Health check ────────────────────────────────────────────────
 @app.get("/")
 async def health():
     return {
@@ -86,76 +117,56 @@ async def health():
         "timestamp": datetime.utcnow().isoformat(),
     }
 
-# ─── Webhook verification (GET) ─────────────────────────────────
 @app.get("/webhook")
 async def verify_webhook(request: Request):
     params = request.query_params
     mode = params.get("hub.mode")
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
-
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        log.info("✅ Webhook verified successfully")
+        log.info("Webhook verified successfully")
         return Response(content=challenge, media_type="text/plain")
-
-    log.warning("❌ Webhook verification failed")
+    log.warning("Webhook verification failed")
     return Response(content="Forbidden", status_code=403)
 
-# ─── Webhook handler (POST) ─────────────────────────────────────
 @app.post("/webhook")
 async def handle_webhook(request: Request):
     body = await request.json()
-
     try:
         entry = body.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
         contacts = value.get("contacts", [])
-
         if not messages:
             return {"status": "no messages"}
-
         msg = messages[0]
         contact = contacts[0] if contacts else {}
         sender = msg.get("from", "unknown")
         sender_name = contact.get("profile", {}).get("name", "Cliente")
         msg_type = msg.get("type", "")
-
-        # Handle text messages only
         if msg_type == "text":
             text = msg["text"]["body"]
-            log.info(f"📩 Message from {sender_name} ({sender}): {text}")
-
-            # Get or create conversation history
+            log.info(f"Message from {sender_name} ({sender}): {text}")
             if sender not in conversations:
                 conversations[sender] = []
-
             conversations[sender].append({"role": "user", "content": text})
-
-            # Call Claude API
             reply = await call_claude(sender, sender_name)
-
-            # Send reply via WhatsApp
             await send_whatsapp_message(sender, reply)
-            log.info(f"📤 Reply to {sender_name}: {reply[:80]}...")
+            log.info(f"Reply to {sender_name}: {reply[:80]}...")
         else:
-            log.info(f"📎 Non-text message ({msg_type}) from {sender_name}")
+            log.info(f"Non-text message ({msg_type}) from {sender_name}")
             await send_whatsapp_message(
                 sender,
-                "De momento apenas consigo processar mensagens de texto. Como posso ajudá-lo?"
+                "De momento apenas processamos mensagens de texto.\n\nPara falar connosco diretamente, ligue para +351 932 348 037."
             )
-
     except Exception as e:
         log.error(f"Webhook processing error: {e}")
-
     return {"status": "ok"}
 
-# ─── Claude API call ─────────────────────────────────────────────
 async def call_claude(sender: str, sender_name: str) -> str:
     messages = conversations.get(sender, [])
-    system = SYSTEM_PROMPT + f"\n\nO nome do paciente é: {sender_name}"
-
+    system = SYSTEM_PROMPT + f"\n\nNome do paciente: {sender_name}"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -175,21 +186,17 @@ async def call_claude(sender: str, sender_name: str) -> str:
             resp.raise_for_status()
             data = resp.json()
             reply = data["content"][0]["text"]
-
-            # Store assistant reply in history
             conversations[sender].append({"role": "assistant", "content": reply})
-
             return reply
-
     except Exception as e:
         log.error(f"Claude API error: {e}")
         return (
-            "Pedimos desculpa, mas de momento não conseguimos processar o seu pedido. "
-            "Por favor, tente novamente ou contacte-nos diretamente pelo telefone +351 932 348 037 "
-            "ou através do nosso site apexcapilar.com."
+            "Pedimos desculpa, mas de momento nao foi possivel processar o seu pedido.\n\n"
+            "Por favor, contacte-nos diretamente:\n"
+            "Telefone: +351 932 348 037\n"
+            "Website: apexcapilar.com"
         )
 
-# ─── Send WhatsApp message ───────────────────────────────────────
 async def send_whatsapp_message(to: str, text: str):
     url = f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_ID}/messages"
     headers = {
@@ -202,7 +209,6 @@ async def send_whatsapp_message(to: str, text: str):
         "type": "text",
         "text": {"body": text},
     }
-
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(url, headers=headers, json=payload)
@@ -210,7 +216,6 @@ async def send_whatsapp_message(to: str, text: str):
     except Exception as e:
         log.error(f"Failed to send WhatsApp message: {e}")
 
-# ─── Run ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
