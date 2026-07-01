@@ -26,7 +26,7 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")  # set this on Railway!
 PORT = int(os.getenv("PORT", "8000"))
 MAX_HISTORY = 20
-MAX_TOKENS = 300
+MAX_TOKENS = 1000
 DB_PATH = os.getenv("DB_PATH", "/data/conversations.db")
 
 # ─── System Prompt ────────────────────────────────────────────────────────────
@@ -331,13 +331,20 @@ async def call_claude(sender: str, sender_name: str) -> str:
                 json={
                     "model": CLAUDE_MODEL,
                     "max_tokens": MAX_TOKENS,
+                    "output_config": {"effort": "low"},
                     "system": system,
                     "messages": history[-MAX_HISTORY:],
                 },
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["content"][0]["text"]
+            # O Sonnet 5 usa raciocinio adaptativo: o 1o bloco pode ser "thinking".
+            # Extrair o primeiro bloco de texto, nao assumir content[0].
+            texts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
+            reply = "\n\n".join(t for t in texts if t).strip()
+            if not reply:
+                raise ValueError(f"resposta sem bloco de texto (stop_reason={data.get('stop_reason')})")
+            return reply
     except Exception as e:
         log.error(f"Claude API error: {e}")
         return (
