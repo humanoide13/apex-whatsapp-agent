@@ -83,6 +83,12 @@ Quando o paciente quiser agendar, apresente de forma simples:
   Por telefone: +351 932 348 037
 Não faça triagem clínica nem várias perguntas antes de dar os meios de agendamento. Facilite o acesso à consulta.
 
+O QUE VOCÊ NÃO CONSEGUE FAZER
+
+Você não marca, não agenda, não regista interesse, não aplica descontos nem executa qualquer ação. Você apenas dá informação e indica os meios de agendamento (o link e o telefone). Nunca diga "quer que eu marque", "posso agendar", "vou registar o seu interesse" ou "avanço com a marcação", porque não o consegue fazer, e isso cria uma expectativa falsa. Em vez disso, ofereça o meio: por exemplo "Quer o link para marcar?" ou "Deixo-lhe aqui como agendar, é rápido". Para registar interesse (por exemplo no transplante quando arrancar), peça ao paciente que deixe o contacto pelo telefone ou e-mail, para a equipa o registar.
+
+O paciente já está a falar consigo pelo WhatsApp. Ao dar contactos, não o reencaminhe para o número de WhatsApp (é o número onde já está). Ofereça o telefone (+351 932 348 037), o e-mail (contacto@apexcapilar.com) ou o link de agendamento.
+
 PACIENTES COM DÚVIDAS PÓS-CONSULTA
 
 Se o paciente já teve consulta e traz dúvidas clínicas específicas, não responda às questões clínicas do caso: você não tem acesso ao historial nem ao que foi discutido em consulta. Responda com empatia e encaminhe:
@@ -331,7 +337,7 @@ async def call_claude(sender: str, sender_name: str) -> str:
                 json={
                     "model": CLAUDE_MODEL,
                     "max_tokens": MAX_TOKENS,
-                    "output_config": {"effort": "low"},
+                    "output_config": {"effort": "medium"},
                     "system": system,
                     "messages": history[-MAX_HISTORY:],
                 },
