@@ -10,6 +10,7 @@ import logging
 import httpx
 import sqlite3
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
@@ -22,6 +23,7 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "apex-capilar-2026")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")  # app secret Meta p/ validar X-Hub-Signature-256
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")  # set this on Railway!
 PORT = int(os.getenv("PORT", "8000"))
@@ -175,6 +177,12 @@ def init_db():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_phone ON messages(phone)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_created ON messages(created_at)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS processed_messages (
+            wamid TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
     conn.close()
     log.info(f"Database ready at {DB_PATH}")
@@ -224,6 +232,15 @@ def db_get_history_for_claude(phone: str) -> list[dict]:
     ).fetchall()
     conn.close()
     return [{"role": r[0], "content": r[1]} for r in rows]
+
+def db_mark_processed(wamid: str) -> bool:
+    """True se a mensagem ainda nao tinha sido processada (Meta reenvia webhooks sem 200 a tempo)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute("INSERT OR IGNORE INTO processed_messages (wamid) VALUES (?)", (wamid,))
+    conn.commit()
+    is_new = cur.rowcount == 1
+    conn.close()
+    return is_new
 
 def db_is_first_message(phone: str) -> bool:
     conn = sqlite3.connect(DB_PATH)
@@ -285,7 +302,16 @@ async def verify_webhook(request: Request):
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
-    body = await request.json()
+    raw = await request.body()
+    if WHATSAPP_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        expected = "sha256=" + hmac.new(WHATSAPP_APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            log.warning("Webhook rejeitado: assinatura X-Hub-Signature-256 invalida ou ausente")
+            return Response(content="Forbidden", status_code=403)
+    else:
+        log.warning("WHATSAPP_APP_SECRET nao configurado: webhook a aceitar POSTs sem validar assinatura")
+    body = json.loads(raw)
     try:
         entry = body.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
@@ -299,6 +325,10 @@ async def handle_webhook(request: Request):
         sender = msg.get("from", "unknown")
         sender_name = contact.get("profile", {}).get("name", "Cliente")
         msg_type = msg.get("type", "")
+        wamid = msg.get("id", "")
+        if wamid and not db_mark_processed(wamid):
+            log.info(f"Webhook duplicado ignorado (wamid {wamid[:24]}...)")
+            return {"status": "duplicate ignored"}
         if msg_type == "text":
             text = msg["text"]["body"]
             log.info(f"Message from {sender_name} ({sender}): {text}")
@@ -333,6 +363,11 @@ async def call_claude(sender: str, sender_name: str) -> str:
     history = db_get_history_for_claude(sender)
     is_first = len(history) <= 1
     system = SYSTEM_PROMPT + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente: {'sim' if is_first else 'nao'}"
+    # A API exige que a primeira mensagem seja 'user'; o corte do historico
+    # pode comecar num 'assistant' (dava 400 em conversas com 11+ mensagens do paciente).
+    messages = history[-MAX_HISTORY:]
+    while messages and messages[0]["role"] != "user":
+        messages.pop(0)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -347,7 +382,7 @@ async def call_claude(sender: str, sender_name: str) -> str:
                     "max_tokens": MAX_TOKENS,
                     "output_config": {"effort": "medium"},
                     "system": system,
-                    "messages": history[-MAX_HISTORY:],
+                    "messages": messages,
                 },
             )
             resp.raise_for_status()
@@ -611,7 +646,7 @@ let seenCounts = JSON.parse(localStorage.getItem('apex_seen') || '{}');
 function saveSeen(){ localStorage.setItem('apex_seen', JSON.stringify(seenCounts)); }
 function getNewCount(phone,total){ const s = seenCounts[phone] || 0; return Math.max(0, total - s); }
 function markSeen(phone,total){ seenCounts[phone] = total; saveSeen(); }
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function initials(name){
   const parts = (name||'').trim().split(' ').filter(Boolean);
   if(!parts.length) return '?';
