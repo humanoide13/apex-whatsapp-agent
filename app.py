@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from contextlib import asynccontextmanager
@@ -138,15 +139,13 @@ Regras absolutas:
 
 GESTÃO DA CONVERSA
 
-Cumprimente o paciente apenas na primeira mensagem. Nas seguintes, responda diretamente ao que foi perguntado. Termine cada resposta com uma abertura natural para o paciente continuar ou com uma indicação clara do próximo passo.
+Cumprimente o paciente na primeira mensagem de cada dia. Se ainda houve conversa mais cedo nesse mesmo dia, responda diretamente sem repetir a saudação. Termine cada resposta com uma abertura natural para o paciente continuar ou com uma indicação clara do próximo passo. Use o campo "Esta e a primeira mensagem do paciente hoje" para decidir: se "sim", cumprimente; se "nao", vá direto à resposta.
 
-PRIMEIRA MENSAGEM (apenas na primeira interação)
+PRIMEIRA MENSAGEM DO DIA (quando é a primeira comunicação do paciente nesse dia)
 
-"Bem-vindo à APEX CAPILAR, clínica de medicina capilar baseada em evidência, no Porto.
+Comece com uma saudação natural ao momento do dia (por exemplo "Bom dia" ou "Boa tarde") seguida de uma abertura acolhedora, e depois responda ao que foi perguntado. Se for também a toda a primeira vez que o paciente contacta, pode apresentar a clínica brevemente: "Bem-vindo à APEX CAPILAR, clínica de medicina capilar baseada em evidência, no Porto." Num paciente que já conhece a clínica mas volta noutro dia, sauda sem repetir a apresentação.
 
-Estou ao seu dispor para informações ou agendamento. Em que posso ajudá-lo?"
-
-MENSAGENS SEGUINTES
+MENSAGENS SEGUINTES NO MESMO DIA
 
 Responda diretamente ao que o paciente perguntou, sem repetir saudações ou apresentações. Mantenha o tom acolhedor e sério em cada interação."""
 
@@ -242,11 +241,31 @@ def db_mark_processed(wamid: str) -> bool:
     conn.close()
     return is_new
 
-def db_is_first_message(phone: str) -> bool:
+def _local_date(dt: datetime):
+    """Data no fuso de Portugal (para o 'dia' ser o do paciente, nao o do servidor UTC).
+    Fallback para UTC se o tzdata faltar, para nunca rebentar em producao."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    try:
+        return dt.astimezone(ZoneInfo("Europe/Lisbon")).date()
+    except Exception:
+        return dt.astimezone(timezone.utc).date()
+
+def db_is_first_message_today(phone: str) -> bool:
+    """True se a mensagem do paciente acabada de guardar for a primeira comunicacao dele
+    nesse dia (fuso de Portugal). Sauda-se na primeira mensagem de cada dia."""
     conn = sqlite3.connect(DB_PATH)
-    count = conn.execute("SELECT COUNT(*) FROM messages WHERE phone = ?", (phone,)).fetchone()[0]
+    rows = conn.execute(
+        "SELECT created_at FROM messages WHERE phone = ? AND role = 'user' ORDER BY created_at DESC LIMIT 2",
+        (phone,),
+    ).fetchall()
     conn.close()
-    return count == 0
+    if len(rows) <= 1:
+        return True  # primeira mensagem de sempre
+    # rows[0] = a atual (ja guardada); rows[1] = a anterior do paciente
+    prev_date = _local_date(datetime.fromisoformat(rows[1][0]))
+    today = _local_date(datetime.now(timezone.utc))
+    return prev_date != today
 
 # ─── In-memory fallback (keeps working if DB fails) ──────────────────────────
 
@@ -357,12 +376,10 @@ async def handle_webhook(request: Request):
 # ─── Claude ───────────────────────────────────────────────────────────────────
 
 async def call_claude(sender: str, sender_name: str) -> str:
-    is_first = db_is_first_message(sender)
-    # After saving the user message, this will be False for subsequent,
-    # but we already saved, so check count == 1
     history = db_get_history_for_claude(sender)
-    is_first = len(history) <= 1
-    system = SYSTEM_PROMPT + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente: {'sim' if is_first else 'nao'}"
+    # Saudar na primeira comunicacao de cada DIA (nao so na primeira de sempre).
+    is_first_today = db_is_first_message_today(sender)
+    system = SYSTEM_PROMPT + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente hoje: {'sim' if is_first_today else 'nao'}"
     # A API exige que a primeira mensagem seja 'user'; o corte do historico
     # pode comecar num 'assistant' (dava 400 em conversas com 11+ mensagens do paciente).
     messages = history[-MAX_HISTORY:]
