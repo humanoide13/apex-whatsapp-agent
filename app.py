@@ -614,6 +614,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     padding:14px 18px 8px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-700);font-weight:600}
   .total-badge{background:var(--surface-3);color:var(--text-2);padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600}
   .sidebar-list{flex:1;overflow-y:auto}
+  .filter-tabs{display:flex;gap:6px;padding:0 18px 10px}
+  .ftab{font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:12px;
+    border:1px solid var(--border);color:var(--text-2);cursor:pointer;background:none;font-weight:600;transition:.16s}
+  .ftab:hover{color:var(--gold-300)}
+  .ftab.active{border-color:var(--gold-500);color:var(--gold-300);background:rgba(181,148,89,.1)}
+  .chip{display:inline-block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+    padding:2px 7px;border-radius:9px;margin-left:8px;vertical-align:2px;flex-shrink:0}
+  .chip-site{color:var(--gold-300);border:1px solid rgba(181,148,89,.55);background:rgba(181,148,89,.1)}
+  .chip-zap{color:#7dc98f;border:1px solid rgba(37,211,102,.4);background:rgba(37,211,102,.08)}
+  .avatar.ch-site{border-color:rgba(181,148,89,.6)}
+  .avatar.ch-zap{border-color:rgba(37,211,102,.35)}
 
   .conv-item{
     display:flex;gap:13px;align-items:center;padding:13px 16px 13px 18px;
@@ -712,6 +723,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
       </div>
       <div class="list-title"><span>Conversas</span><span class="total-badge" id="totalBadge">0</span></div>
+      <div class="filter-tabs">
+        <button class="ftab active" data-ch="all" onclick="setChannel('all')">Todas</button>
+        <button class="ftab" data-ch="zap" onclick="setChannel('zap')">WhatsApp</button>
+        <button class="ftab" data-ch="site" onclick="setChannel('site')">Site</button>
+      </div>
       <div class="sidebar-list"><div id="sidebar"></div></div>
     </div>
     <div class="chat-area" id="chatArea">
@@ -734,6 +750,20 @@ function saveSeen(){ localStorage.setItem('apex_seen', JSON.stringify(seenCounts
 function getNewCount(phone,total){ const s = seenCounts[phone] || 0; return Math.max(0, total - s); }
 function markSeen(phone,total){ seenCounts[phone] = total; saveSeen(); }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function channelOf(phone){ return String(phone||'').startsWith('web:') ? 'site' : 'zap'; }
+function sidShort(phone){ return String(phone).slice(4, 10); }
+function displayName(c){
+  if(channelOf(c.phone) === 'site') return 'Visitante do site \u00b7 ' + sidShort(c.phone);
+  return c.name || 'Sem nome';
+}
+function displayId(phone){
+  return channelOf(phone) === 'site' ? ('Sess\u00e3o web \u00b7 ' + sidShort(phone)) : ('+' + phone);
+}
+function chipHtml(phone){
+  return channelOf(phone) === 'site'
+    ? '<span class="chip chip-site">Site</span>'
+    : '<span class="chip chip-zap">WhatsApp</span>';
+}
 function initials(name){
   const parts = (name||'').trim().split(' ').filter(Boolean);
   if(!parts.length) return '?';
@@ -759,13 +789,14 @@ function renderConversations(convs){
     const nw = getNewCount(c.phone, c.total_messages);
     const cls = nw > 0 ? ' has-new' : '';
     const active = c.phone === currentPhone ? ' active' : '';
-    const name = esc(c.name || 'Sem nome');
+    const ch = channelOf(c.phone);
+    const name = esc(displayName(c));
     return `<div class="conv-item${cls}${active}" data-phone="${c.phone}" data-name="${name}" data-total="${c.total_messages}">
-      <div class="avatar">${esc(initials(c.name))}</div>
+      <div class="avatar ch-${ch}">${ch === 'site' ? 'VS' : esc(initials(c.name))}</div>
       <div class="conv-main">
-        <div class="conv-top"><span class="conv-name">${name}</span><span class="conv-date">${formatDate(c.last_message)}</span></div>
+        <div class="conv-top"><span class="conv-name">${name}${chipHtml(c.phone)}</span><span class="conv-date">${formatDate(c.last_message)}</span></div>
         <div class="conv-bottom">
-          <span class="conv-phone">+${c.phone}</span>
+          <span class="conv-phone">${esc(displayId(c.phone))}</span>
           <span class="conv-count">${c.total_messages} mensagens</span>
           <span class="conv-badge">${nw}</span>
         </div>
@@ -774,11 +805,19 @@ function renderConversations(convs){
   }).join('');
 }
 
+let channelFilter = 'all';
+function setChannel(ch){
+  channelFilter = ch;
+  document.querySelectorAll('.ftab').forEach(b => b.classList.toggle('active', b.dataset.ch === ch));
+  filterConversations();
+}
 function filterConversations(){
   const q = document.getElementById('searchInput').value.toLowerCase().trim();
-  if(!q){ renderConversations(allConvs); return; }
-  renderConversations(allConvs.filter(c =>
-    (c.name||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q)));
+  let list = allConvs;
+  if(channelFilter !== 'all') list = list.filter(c => channelOf(c.phone) === channelFilter);
+  if(q) list = list.filter(c =>
+    (c.name||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q));
+  renderConversations(list);
 }
 
 async function load(){
@@ -787,6 +826,7 @@ async function load(){
     if(!res.ok){ document.getElementById('sidebar').innerHTML = '<div class="no-results">Acesso negado</div>'; return; }
     allConvs = await res.json();
     document.getElementById('totalBadge').textContent = allConvs.length;
+
     const totalNew = allConvs.reduce((s,c) => s + getNewCount(c.phone, c.total_messages), 0);
     const badge = document.getElementById('statusBadge');
     if(totalNew > 0){
@@ -842,8 +882,8 @@ async function openChat(phone, name){
   ca.innerHTML = `
     <div class="chat-header">
       <button class="chat-back" aria-label="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-      <div class="avatar">${esc(initials(name))}</div>
-      <div class="chat-header-info"><h2>${esc(name || 'Paciente')}</h2><div class="phone">+${phone}</div></div>
+      <div class="avatar ch-${channelOf(phone)}">${channelOf(phone) === 'site' ? 'VS' : esc(initials(name))}</div>
+      <div class="chat-header-info"><h2>${esc(name || 'Paciente')}${chipHtml(phone)}</h2><div class="phone">${esc(displayId(phone))}</div></div>
     </div>
     <div class="chat-messages"></div>`;
   renderMessages(ca.querySelector('.chat-messages'), msgs);
