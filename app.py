@@ -7,6 +7,8 @@ With conversation logging (SQLite) and admin dashboard.
 import os
 import json
 import logging
+import re
+import time
 import httpx
 import sqlite3
 import hashlib
@@ -16,6 +18,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -297,6 +300,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="APEX CAPILAR WhatsApp Agent", lifespan=lifespan)
 
+# CORS: so o site da APEX pode falar com o /web-chat
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://apexcapilar.com", "https://www.apexcapilar.com"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
+
 @app.get("/")
 async def health():
     return {
@@ -375,11 +386,11 @@ async def handle_webhook(request: Request):
 
 # ─── Claude ───────────────────────────────────────────────────────────────────
 
-async def call_claude(sender: str, sender_name: str) -> str:
+async def call_claude(sender: str, sender_name: str, extra_system: str = "") -> str:
     history = db_get_history_for_claude(sender)
     # Saudar na primeira comunicacao de cada DIA (nao so na primeira de sempre).
     is_first_today = db_is_first_message_today(sender)
-    system = SYSTEM_PROMPT + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente hoje: {'sim' if is_first_today else 'nao'}"
+    system = SYSTEM_PROMPT + extra_system + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente hoje: {'sim' if is_first_today else 'nao'}"
     # A API exige que a primeira mensagem seja 'user'; o corte do historico
     # pode comecar num 'assistant' (dava 400 em conversas com 11+ mensagens do paciente).
     messages = history[-MAX_HISTORY:]
@@ -420,6 +431,65 @@ async def call_claude(sender: str, sender_name: str) -> str:
             "E-mail: contacto@apexcapilar.com\n"
             "Website: apexcapilar.com"
         )
+
+# ─── Web chat (assistente no site apexcapilar.com) ──────────────────────────
+# Mesmo cerebro do WhatsApp, porta de entrada web. Sessoes guardadas na mesma
+# BD com a chave "web:<session_id>", por isso aparecem no dashboard normal.
+
+WEB_PROMPT_ADDENDUM = """
+
+CANAL: CHAT DO SITE (apexcapilar.com)
+O paciente esta a falar contigo pela janela de chat do proprio site, nao pelo WhatsApp.
+- Respostas CURTAS (2 a 5 frases), tom identico ao habitual.
+- Para agendar, indica a pagina de agendamento do site (apexcapilar.com/agendar.html) ou o WhatsApp +351 936 892 039. Nunca ofereças executar a marcacao tu.
+- Nao ha nome do visitante; nao inventes um. Trata por "voce".
+"""
+
+WEB_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{8,64}$")
+WEB_MAX_MSG_LEN = 500
+
+# Rate limit em memoria: por sessao (rajada) e por IP (dia).
+_web_hits_session: dict[str, list[float]] = {}
+_web_hits_ip: dict[str, list[float]] = {}
+
+def _web_rate_ok(session_id: str, ip: str) -> bool:
+    now = time.time()
+    s = [t for t in _web_hits_session.get(session_id, []) if now - t < 60]
+    if len(s) >= 8:
+        return False
+    i = [t for t in _web_hits_ip.get(ip, []) if now - t < 86400]
+    if len(i) >= 60:
+        return False
+    s.append(now); i.append(now)
+    _web_hits_session[session_id] = s
+    _web_hits_ip[ip] = i
+    # higiene: nao deixar os dicts crescerem sem fim
+    if len(_web_hits_session) > 5000:
+        _web_hits_session.clear()
+    if len(_web_hits_ip) > 5000:
+        _web_hits_ip.clear()
+    return True
+
+@app.post("/web-chat")
+async def web_chat(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON invalido")
+    session_id = str(body.get("session_id", ""))
+    message = str(body.get("message", "")).strip()
+    if not WEB_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="session_id invalido")
+    if not message or len(message) > WEB_MAX_MSG_LEN:
+        raise HTTPException(status_code=400, detail="mensagem vazia ou longa demais")
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0].strip()
+    if not _web_rate_ok(session_id, ip):
+        return JSONResponse(status_code=429, content={"reply": "Recebemos muitas mensagens seguidas. Aguarde um momento e tente novamente, ou contacte-nos pelo WhatsApp +351 936 892 039."})
+    web_key = f"web:{session_id}"
+    db_save_message(web_key, "Visitante do site", "user", message)
+    reply = await call_claude(web_key, "Visitante do site", extra_system=WEB_PROMPT_ADDENDUM)
+    db_save_message(web_key, "Visitante do site", "assistant", reply)
+    return {"reply": reply}
 
 # ─── WhatsApp send ────────────────────────────────────────────────────────────
 
