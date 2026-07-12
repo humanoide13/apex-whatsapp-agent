@@ -14,10 +14,6 @@ import sqlite3
 import hashlib
 import hmac
 import secrets
-import smtplib
-import ssl
-import asyncio
-from email.message import EmailMessage
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
@@ -35,12 +31,10 @@ WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")  # app secret Meta p/
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")  # set this on Railway!
 PORT = int(os.getenv("PORT", "8000"))
-# SMTP do lead do assistente web (caixa dedicada assistente@apexcapilar.com)
-SMTP_HOST = os.getenv("SMTP_HOST", "mail.apexcapilar.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
-LEAD_TO = os.getenv("LEAD_TO", "contacto@apexcapilar.com")
+# Lead do assistente web: entregue por relay HTTPS no proprio cPanel
+# (lead-mail.php), porque o Railway bloqueia SMTP de saida (timed out).
+LEAD_URL = os.getenv("LEAD_URL", "https://apexcapilar.com/lead-mail.php")
+LEAD_SECRET = os.getenv("LEAD_SECRET", "")
 MAX_HISTORY = 20
 MAX_TOKENS = 1000
 DB_PATH = os.getenv("DB_PATH", "/data/conversations.db")
@@ -507,9 +501,9 @@ async def web_chat(request: Request):
     if m:
         campos = m.group(1).strip()
         reply = LEAD_RE.sub("", reply).strip()
-        enviado = await asyncio.to_thread(_send_lead_email, campos, session_id)
+        enviado = await _send_lead_email(campos, session_id)
         if enviado:
-            log.info(f"Lead do assistente web enviado para {LEAD_TO} (sessao {session_id[:12]})")
+            log.info(f"Lead do assistente web entregue via relay (sessao {session_id[:12]})")
         else:
             reply += "\n\nNão consegui registar o contacto automaticamente neste momento. Se preferir, ligue +351 932 348 037 ou escreva para contacto@apexcapilar.com."
     db_save_message(web_key, "Visitante do site", "assistant", reply)
@@ -519,28 +513,18 @@ async def web_chat(request: Request):
 LEAD_RE = re.compile(r"\[LEAD\](.*?)\[/LEAD\]", re.DOTALL)
 
 
-def _send_lead_email(campos: str, session_id: str) -> bool:
-    """Envia o lead recolhido pelo assistente web para a caixa da clinica (sincrono; correr em thread)."""
-    if not SMTP_USER or not SMTP_PASS:
-        log.error("Lead recebido mas SMTP_USER/SMTP_PASS nao configurados no Railway")
+async def _send_lead_email(campos: str, session_id: str) -> bool:
+    """Entrega o lead a caixa da clinica atraves do relay HTTPS no cPanel."""
+    if not LEAD_SECRET:
+        log.error("Lead recebido mas LEAD_SECRET nao configurado no Railway")
         return False
     try:
-        msg = EmailMessage()
-        msg["From"] = f"Assistente APEX <{SMTP_USER}>"
-        msg["To"] = LEAD_TO
-        msg["Subject"] = "Novo contacto deixado no assistente do site"
-        agora = datetime.now(ZoneInfo("Europe/Lisbon")).strftime("%d/%m/%Y %H:%M")
-        msg.set_content(
-            "O assistente do site registou um pedido de contacto.\n\n"
-            + campos + "\n\n"
-            + f"Quando: {agora}\nSessao web: {session_id}\n\n"
-            "A conversa completa esta no dashboard do bot."
-        )
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=20) as srv:
-            srv.login(SMTP_USER, SMTP_PASS)
-            srv.send_message(msg)
-        return True
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(LEAD_URL, json={"secret": LEAD_SECRET, "campos": campos, "sessao": session_id})
+            ok = r.status_code == 200 and r.json().get("ok") is True
+            if not ok:
+                log.error(f"Relay do lead respondeu {r.status_code}: {r.text[:200]}")
+            return ok
     except Exception as e:
         log.error(f"Falha a enviar lead por email: {e}")
         return False
