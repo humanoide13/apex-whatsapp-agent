@@ -39,6 +39,17 @@ MAX_HISTORY = 20
 MAX_TOKENS = 1000
 DB_PATH = os.getenv("DB_PATH", "/data/conversations.db")
 
+# ─── Sinais de saude (para o vigia externo) ──────────────────────────────────
+# O bot ja esteve mudo 3 dias sem ninguem dar por isso (05/05/2026: o trial do
+# Railway acabou e a aplicacao foi pausada). O cron do cPanel consulta
+# /health/deep de 10 em 10 minutos e avisa por email. Estes contadores dao ao
+# endpoint aquilo que um simples "estou vivo" nao ve: o servico pode estar de
+# pe e o WhatsApp mudo na mesma, se o token do Meta morrer ou o modelo cair.
+_claude_fail_streak = 0        # falhas seguidas da API Claude (3+ = degradado)
+_claude_last_error = ""
+_meta_check = {"at": 0.0, "ok": None, "detail": ""}  # cache do check ao Meta
+META_CHECK_TTL = 300           # segundos; evita martelar a Graph API
+
 # ─── System Prompt ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """Você é a assistente virtual da APEX CAPILAR, uma clínica de medicina capilar baseada em evidência, no Porto.
@@ -348,6 +359,81 @@ async def health():
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
+# ─── Saude profunda (consumida pelo vigia do cPanel) ─────────────────────────
+# "/" so prova que o processo esta vivo. Este endpoint prova que o bot CONSEGUE
+# responder a um paciente: BD acessivel, token do Meta valido, API Claude sem
+# falhas seguidas. Devolve 503 quando algo esta partido, para o vigia disparar.
+# Detalhes de erro so com ?k=<DASHBOARD_TOKEN>: sem chave, o publico ve apenas
+# que componente falhou, nunca a mensagem crua da Meta ou da Anthropic.
+
+def _note_claude_ok():
+    global _claude_fail_streak, _claude_last_error
+    _claude_fail_streak = 0
+    _claude_last_error = ""
+
+def _note_claude_failure(err: Exception):
+    global _claude_fail_streak, _claude_last_error
+    _claude_fail_streak += 1
+    _claude_last_error = f"{type(err).__name__}: {err}"[:200]
+
+async def _check_meta_token() -> tuple[bool, str]:
+    """Pergunta a Graph API se o token ainda serve. Token expirado da 401/190."""
+    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
+        return False, "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID em falta"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_ID}",
+                params={"fields": "id,display_phone_number"},
+                headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}"},
+            )
+        if r.status_code == 200:
+            return True, r.json().get("display_phone_number", "ok")
+        return False, f"HTTP {r.status_code}: {r.text[:160]}"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"[:160]
+
+@app.get("/health/deep")
+async def health_deep(request: Request, response: Response):
+    detailed = bool(DASHBOARD_TOKEN) and request.query_params.get("k") == DASHBOARD_TOKEN
+    checks: dict = {}
+
+    # 1. Base de dados no volume persistente
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        checks["db"] = {"ok": True, "detail": DB_PATH}
+    except Exception as e:
+        checks["db"] = {"ok": False, "detail": f"{type(e).__name__}: {e}"[:160]}
+
+    # 2. Token do Meta (o suspeito n.2 quando o bot fica mudo)
+    now = time.time()
+    if _meta_check["ok"] is not None and now - _meta_check["at"] < META_CHECK_TTL:
+        checks["whatsapp"] = {"ok": _meta_check["ok"], "detail": _meta_check["detail"], "cached": True}
+    else:
+        ok, detail = await _check_meta_token()
+        _meta_check.update({"at": now, "ok": ok, "detail": detail})
+        checks["whatsapp"] = {"ok": ok, "detail": detail}
+
+    # 3. API Claude: 3 falhas seguidas = o bot esta a responder so o texto de erro
+    claude_ok = _claude_fail_streak < 3
+    checks["claude"] = {
+        "ok": claude_ok,
+        "detail": _claude_last_error or f"modelo {CLAUDE_MODEL}",
+        "fail_streak": _claude_fail_streak,
+    }
+
+    all_ok = all(c["ok"] for c in checks.values())
+    if not detailed:
+        checks = {name: {"ok": c["ok"]} for name, c in checks.items()}
+    response.status_code = 200 if all_ok else 503
+    return {
+        "status": "APEX_HEALTH_OK" if all_ok else "APEX_HEALTH_FAIL",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
 # ─── Webhook ──────────────────────────────────────────────────────────────────
 
 @app.get("/webhook")
@@ -464,8 +550,10 @@ async def call_claude(sender: str, sender_name: str, extra_system: str = "") -> 
             reply = "\n\n".join(t for t in texts if t).strip()
             if not reply:
                 raise ValueError(f"resposta sem bloco de texto (stop_reason={data.get('stop_reason')})")
+            _note_claude_ok()
             return reply
     except Exception as e:
+        _note_claude_failure(e)
         log.error(f"Claude API error: {e}")
         return (
             "Pedimos desculpa, mas de momento não foi possível processar o seu pedido.\n\n"
