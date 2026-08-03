@@ -189,7 +189,7 @@ Cumprimente o paciente na primeira mensagem de cada dia. Se ainda houve conversa
 
 PRIMEIRA MENSAGEM DO DIA (quando é a primeira comunicação do paciente nesse dia)
 
-Comece com uma saudação natural ao momento do dia (por exemplo "Bom dia" ou "Boa tarde") seguida de uma abertura acolhedora, e depois responda ao que foi perguntado. Se for também a toda a primeira vez que o paciente contacta, pode apresentar-se brevemente: "Sou a assistente da APEX CAPILAR, clínica de medicina capilar baseada em evidência, no Porto." (a apresentação é da ASSISTENTE, não "está a falar com a clínica": fala-se com alguém, não com uma instituição) Num paciente que já conhece a clínica mas volta noutro dia, sauda sem repetir a apresentação.
+Comece com a saudação indicada no campo "Saudação a usar agora", que é calculada a partir da hora real em Portugal. Use exactamente essa e nunca outra: escrever "Boa tarde" a quem escreve às onze da noite denuncia automatismo. Depois da saudação, uma abertura acolhedora, e a seguir responda ao que foi perguntado. Se for também a toda a primeira vez que o paciente contacta, pode apresentar-se brevemente: "Sou a assistente da APEX CAPILAR, clínica de medicina capilar baseada em evidência, no Porto." (a apresentação é da ASSISTENTE, não "está a falar com a clínica": fala-se com alguém, não com uma instituição) Num paciente que já conhece a clínica mas volta noutro dia, sauda sem repetir a apresentação.
 
 MENSAGENS SEGUINTES NO MESMO DIA
 
@@ -296,6 +296,16 @@ def _local_date(dt: datetime):
         return dt.astimezone(ZoneInfo("Europe/Lisbon")).date()
     except Exception:
         return dt.astimezone(timezone.utc).date()
+
+def saudacao_por_hora(dt: datetime) -> str:
+    """Saudacao portuguesa pela hora real: bom dia ate as 12h, boa tarde ate as 19h,
+    boa noite a partir dai. Sem isto o modelo nao sabe a hora e diz sempre 'Boa tarde'."""
+    h = dt.hour
+    if h < 12:
+        return "Bom dia"
+    if h < 19:
+        return "Boa tarde"
+    return "Boa noite"
 
 def db_is_first_message_today(phone: str) -> bool:
     """True se a mensagem do paciente acabada de guardar for a primeira comunicacao dele
@@ -517,7 +527,14 @@ async def call_claude(sender: str, sender_name: str, extra_system: str = "") -> 
     history = db_get_history_for_claude(sender)
     # Saudar na primeira comunicacao de cada DIA (nao so na primeira de sempre).
     is_first_today = db_is_first_message_today(sender)
-    system = SYSTEM_PROMPT + extra_system + f"\n\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente hoje: {'sim' if is_first_today else 'nao'}"
+    # O modelo nao sabe que horas sao e saudava sempre "Boa tarde", mesmo as 23h.
+    agora = datetime.now(ZoneInfo("Europe/Lisbon"))
+    system = (
+        SYSTEM_PROMPT + extra_system
+        + f"\n\nData e hora em Portugal neste momento: {agora.strftime('%d/%m/%Y %H:%M')}"
+        + f"\nSaudacao a usar agora: {saudacao_por_hora(agora)}"
+        + f"\nNome do paciente: {sender_name}\nEsta e a primeira mensagem do paciente hoje: {'sim' if is_first_today else 'nao'}"
+    )
     if not sender.startswith("web:"):
         system += f"\nNumero de WhatsApp do paciente: {sender}"
     # A API exige que a primeira mensagem seja 'user'; o corte do historico
