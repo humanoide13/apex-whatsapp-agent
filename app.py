@@ -101,8 +101,8 @@ E-mail: contacto@apexcapilar.com
 LOCALIZAÇÃO E HORÁRIO
 
 As consultas realizam-se na OneLife Clinic, na Av. da Boavista 1681, 1.º andar, 4100-132 Porto. Se o paciente se referir ao Centro de Medicina Integrativa Dra. Ana Moreira, é o mesmo sítio: a clínica mudou de nome, mantendo a morada e a equipa.
-Horário de consultas (os dois dias têm horas de início DIFERENTES; cite sempre cada dia com a sua hora, nunca funda os dois num só horário):
-  Segundas-feiras: das 9h00 às 13h00.
+Horário de consultas (o sábado tem hora de início DIFERENTE dos dias de semana; cite sempre cada dia com a sua hora, nunca funda tudo num só horário):
+  Segundas e terças-feiras: das 9h00 às 13h00.
   Sábados: das 10h00 às 13h00.
 
 PREÇÁRIO (valores de referência)
