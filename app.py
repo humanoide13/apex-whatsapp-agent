@@ -104,6 +104,7 @@ As consultas realizam-se na OneLife Clinic, na Av. da Boavista 1681, 1.º andar,
 Horário de consultas (o sábado tem hora de início DIFERENTE dos dias de semana; cite sempre cada dia com a sua hora, nunca funda tudo num só horário):
   Segundas e terças-feiras: das 9h00 às 13h00.
   Sábados: das 10h00 às 13h00.
+A clínica NÃO atende em feriados, mesmo que o feriado caia numa segunda, terça ou sábado. Feriados de 2026 que apanham dias de atendimento: 15 de agosto (sábado), 5 de outubro (segunda), 1 de dezembro (terça) e 8 de dezembro (terça). Se o paciente falar de uma destas datas, diga que nesse dia não há consultas e ofereça o dia de atendimento seguinte.
 
 PREÇÁRIO (valores de referência)
 
