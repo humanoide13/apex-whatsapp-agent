@@ -28,7 +28,7 @@ WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "apex-capilar-2026")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")  # app secret Meta p/ validar X-Hub-Signature-256
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
 DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")  # set this on Railway!
 PORT = int(os.getenv("PORT", "8000"))
 # Lead do assistente web: entregue por relay HTTPS no proprio cPanel
@@ -36,7 +36,9 @@ PORT = int(os.getenv("PORT", "8000"))
 LEAD_URL = os.getenv("LEAD_URL", "https://apexcapilar.com/lead-mail.php")
 LEAD_SECRET = os.getenv("LEAD_SECRET", "")
 MAX_HISTORY = 20
-MAX_TOKENS = 1000
+# Folga para o thinking (conta no max_tokens) + resposta; o tamanho real da
+# resposta e controlado pelo prompt. Com 1000 um thinking longo cortava a resposta.
+MAX_TOKENS = 4000
 DB_PATH = os.getenv("DB_PATH", "/data/conversations.db")
 
 # ─── Sinais de saude (para o vigia externo) ──────────────────────────────────
@@ -562,7 +564,7 @@ async def call_claude(sender: str, sender_name: str, extra_system: str = "") -> 
             )
             resp.raise_for_status()
             data = resp.json()
-            # O Sonnet 5 usa raciocinio adaptativo: o 1o bloco pode ser "thinking".
+            # Sonnet 5.5 usa raciocinio adaptativo: o 1o bloco pode ser "thinking".
             # Extrair o primeiro bloco de texto, nao assumir content[0].
             texts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
             reply = "\n\n".join(t for t in texts if t).strip()
